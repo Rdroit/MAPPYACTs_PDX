@@ -1,0 +1,239 @@
+---
+title: "Oncoprint_PDX"
+author: "Robin Droit"
+  date: "10/11/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Preparation of data
+creation of the matrix for the oncoprint.
+for each gene and each sample we write all of the alterations based on a predefined list coming from the molecular tumor board
+we only keep the alterations appearing a list twice (considering the alterations appearing only once as noise)
+
+```{r complete_oncoprint}
+library(ComplexHeatmap)
+library(tidyverse)
+onco_table = read.csv("Oncoprint_data_table_somatic_mutations_and_cnv.tsv", header = T, sep = "\t")
+complete <- onco_table[!is.na(onco_table$genes), ]
+rownames(complete) <- complete$genes
+complete$genes <- NULL
+complete <- complete[!rowSums(complete == "") >= 78, ]
+complete_keep <- complete
+
+list_genes_mtb <- read.csv("list_genes_mtb_mappyact_2.csv", header = T, sep = "\t")
+list_genes_mtb <- as.character(list_genes_mtb$Gene.1)
+list_genes_mtb <- list_genes_mtb[!duplicated(list_genes_mtb)]
+
+onco_table_cnv = read.csv("Oncoprint_data_table_somatic_mutations_and_cnv.tsv", header = T, sep = "\t")
+
+
+#CGC_list <- read.table("Census_allFri_Mar_19_02_02_52_2021.tsv", sep = "\t", header = TRUE)
+#list_genes = as.character(CGC_list$Gene.Symbol)
+#list_genes = c(list_genes, "EWSR1", "FOXO1", "PAX3", "BRD7", "DNAH5", "CCNB3", "CNTD1", "NOTCH3")
+#complete <- complete[rownames(complete) %in% list_genes, ]
+#complete <- complete[!rownames(complete) %in% c("MUC16", "MUC4"), ]
+
+complete <- complete[rownames(complete) %in% list_genes_mtb, ]
+  
+onco_table_cnv <- onco_table_cnv[onco_table_cnv$genes %in% rownames(complete), ]
+rownames(onco_table_cnv) <- onco_table_cnv$genes
+onco_table_cnv$genes <- NULL
+complete <- onco_table_cnv
+
+complete_annot <- as.data.frame(colnames(complete))
+complete_annot <- data.frame(do.call('rbind', strsplit(as.character(complete_annot$`colnames(complete)`),'_',fixed=TRUE)))
+colnames(complete_annot) <- c("patient", "type")
+rownames(complete_annot) <- colnames(complete)
+
+order <- sort(colnames(complete), decreasing = T)
+complete_annot <- complete_annot[order,]
+complete <- complete[,order]
+
+meta_data <- read.table("clinical_data.csv", sep = ",", header = TRUE, fill = T)
+meta_data$patient <- meta_data$PATIENT_ID
+meta_data <- merge(complete_annot, meta_data, by = "patient")
+
+newdata <- meta_data[order(meta_data$TUMOR_TYPE),]
+newdata$names <- paste(newdata$patient, "_", newdata$type, sep="")
+rownames(newdata) <- newdata$names
+
+complete <- complete[,newdata$names]
+
+order <- c("MAP177_Relapse","MAP177_PDX","MAP194_Relapse",	"MAP194_PDX",	"MAP204_Relapse",	"MAP204_PDX",	"MAP217_Relapse",	"MAP217_PDX",	"MAP469_Relapse",	"MAP469_PDX",	"MAP559_Relapse",	"MAP559_PDX",	"MAP636_Relapse",	"MAP636_PDX",	"MAP215_Relapse",	"MAP215_PDX",	"MAP266_Relapse",	"MAP266_PDX",	"MAP020_Relapse",	"MAP020_PDX",	"MAP086_Relapse",	"MAP086_PDX",	"MAP182_Relapse",	"MAP182_PDX",	"MAP066_Relapse",	"MAP066_PDX",	"MAP108_Relapse",	"MAP108_PDX",	"MAP238_Relapse",	"MAP238_PDX",	"MAP301_Relapse",	"MAP301_PDX",	"MAP303_Relapse",	"MAP303_PDX",	"MAP094_Relapse",	"MAP094_PDX",	"MAP099_Relapse",	"MAP099_PDX",	"MAP125_Relapse",	"MAP125_PDX",	"MAP199_Relapse",	"MAP199_PDX",	"MAP042_Relapse",	"MAP042_PDX",	"MAP097_Relapse",	"MAP097_PDX",	"MAP123_Relapse",	"MAP123_PDX",	"MAP448_Relapse",	"MAP448_PDX",	"MAP539_Relapse",	"MAP539_PDX",	"MAP316_Relapse",	"MAP316_PDX",		"MAP113_Relapse",	"MAP113_PDX",	"MAP119_Relapse",	"MAP119_PDX",	"MAP167_Relapse",	"MAP167_PDX",	"MAP179_Relapse",	"MAP179_PDX",	"MAP006_Relapse",	"MAP006_PDX",	"MAP295_Relapse",	"MAP295_PDX",	"MAP114_Relapse",	"MAP114_PDX",	"MAP196_Relapse",	"MAP196_PDX",	"MAP046_Relapse",	"MAP046_PDX",	"MAP141_Relapse",	"MAP141_PDX",	"MAP170_Relapse",	"MAP170_PDX",	"MAP276_Relapse",	"MAP276_PDX" )
+complete <- complete[,order]
+
+final_table = read.csv("matrix_source_oncoprint_final_figure_fix.tsv", header = T, sep = "\t")
+row.names(final_table) <- final_table$genes
+final_table$genes <- NULL
+complete <- final_table
+
+newdata <- newdata[colnames(complete),]
+
+annot_table <- newdata[,c("patient", "type", "TUMOR_TYPE")]
+colnames(annot_table) <- c("patient", "sample_type", "tumor_type")
+annot_table[,"sample_type"] <- as.character(annot_table[,"sample_type"])
+annot_table[,"patient"] <- as.character(annot_table[,"patient"])
+annot_table[which(annot_table[,"patient"] == "MAP213"),] = NULL
+annot_table[which(annot_table[,"sample_type"] == "Relapse"), "sample_type"] = "Primary relapsed tumor"
+annot_table[,"sample_type"] <- as.factor(annot_table[,"sample_type"])
+
+split = rep(1:39, each = 2)
+
+alter_fun = list(
+    background = function(x, y, w, h) grid.rect(x, y, w, h, 
+			gp = gpar(fill = "#f0f0f0", col = NA)),
+		Amp = function(x, y, w, h) grid.rect(x, y, w*0.6, h-unit(2, "pt"), 
+			gp = gpar(fill = "red", col = NA)),
+	  del = function(x, y, w, h) grid.rect(x, y, w*0.6, h-unit(2, "pt"), 
+			gp = gpar(fill = "blue", col = NA)),
+		Gain = function(x, y, w, h) grid.rect(x, y, w*0.6, h-unit(2, "pt"), 
+			gp = gpar(fill = "#eb6c6c", col = NA)),
+		fusion = function(x, y, w, h) grid.rect(x, y, w*0.4, h*0.4,
+		  gp = gpar(fill = "black", col = NA)),
+		loss = function(x, y, w, h) grid.rect(x, y, w*0.6, h-unit(2, "pt"), 
+			gp = gpar(fill = "#6c96eb", col = NA)),
+		snv = function(x, y, w, h) grid.rect(x, y, w-unit(2, "pt"), h*0.33, 
+			gp = gpar(fill = "#008000", col = NA))
+	)
+cairo_pdf("../oncoprint_total.pdf", height = 30, width = 20)
+col = c(snv = "#008000", Amp = "red", del = "blue", Gain = "#eb6c6c", loss = "#6c96eb", fusion = "black")
+column_title = "OncoPrint for MAPPYACT PDX models"
+heatmap_legend_param = list(title = "Alterations", at = c("snv", "amp", "del", "gain", "loss", "fusion"), 
+		labels = c("Mutations", "Amplifications", "deletions", "gains", "loss", "fusions"))
+to_print <- oncoPrint(complete, column_order = newdata$names, column_split = split,
+	alter_fun = alter_fun,
+	top_annotation = HeatmapAnnotation(df = annot_table,
+    col = list(time = c("Primary relapsed tumor" = "blue", "PDX" = "green"))),
+	column_title = column_title,
+	heatmap_legend_param = heatmap_legend_param,
+	col = col)
+pdf("oncoprint_all_data_no_CGC.pdf", height = 14, width = 14)
+print(to_print)
+dev.off()
+
+write.table(complete[rownames(final_table),], file = "matrix_table_mappyacts_PDX.tsv", sep = "\t", quote = F)
+```
+
+
+## Oncoprint with only the mutations
+
+```{r mutations_oncoprint}
+library(ComplexHeatmap)
+onco_table = read.csv("Oncoprint_data_table_somatic_mutations.tsv", header = T, sep = "\t")
+complete <- onco_table[!is.na(onco_table$genes), ]
+rownames(complete) <- complete$genes
+complete$genes <- NULL
+complete <- complete[rowSums(complete == "snv") >= 2, ]
+
+
+CGC_list <- read.table("Census_allFri_Mar_19_02_02_52_2021.tsv", sep = "\t", header = TRUE)
+complete <- complete[rownames(complete) %in% CGC_list$Gene.Symbol, ]
+
+complete_annot <- as.data.frame(colnames(complete))
+complete_annot <- data.frame(do.call('rbind', strsplit(as.character(complete_annot$`colnames(complete)`),'_',fixed=TRUE)))
+colnames(complete_annot) <- c("patient", "time")
+rownames(complete_annot) <- colnames(complete)
+
+order <- sort(colnames(complete), decreasing = T)
+complete_annot <- complete_annot[order,]
+complete <- complete[,order]
+
+
+alter_fun = list(
+    background = function(x, y, w, h) grid.rect(x, y, w, h, 
+			gp = gpar(fill = "#f0f0f0", col = NA)),
+		snv = function(x, y, w, h) grid.rect(x, y, w-unit(2, "pt"), h*0.33, 
+			gp = gpar(fill = "#008000", col = NA))
+	)
+cairo_pdf("../oncoprint_total.pdf", height = 50, width = 10)
+col = c(snv = "#008000")
+column_title = "OncoPrint for MAPPYACT PDX models"
+heatmap_legend_param = list(title = "Alterations", at = c("snv"), 
+		labels = c("Mutations"))
+to_print <- oncoPrint(complete, column_order = order,
+	alter_fun = alter_fun,
+	top_annotation = HeatmapAnnotation(df = complete_annot,
+    col = list(time = c("Relapse" = "blue", "PDX" = "green"))),
+	column_title = column_title,
+	heatmap_legend_param = heatmap_legend_param,
+	col = col)
+pdf("oncoprint_all_data_no_CGC.pdf", height = 70, width = 10)
+print(to_print)
+dev.off()
+```
+
+
+## complete oncoprint with only the genes in the Cancer Gene Census list
+
+```{r complete_oncoprint_in_CGC}
+library(ComplexHeatmap)
+onco_table = read.csv("Oncoprint_data_table.tsv", header = T, sep = "\t", na.strings=c("","NA"))
+complete <- onco_table[!is.na(onco_table$genes), ]
+rownames(complete) <- complete$genes
+complete$genes <- NULL
+complete <- complete[rowSums(is.na(complete)) <= 27, ]
+
+CGC_list <- read.table("Census_allFri_Mar_19_02_02_52_2021.tsv", sep = "\t", header = TRUE)
+
+complete <- complete[rownames(complete) %in% CGC_list$Gene.Symbol, ]
+complete <- complete[!rownames(complete) %in% c("Intergenic", "COL1A1", "COL3A1"), ]
+
+total_oncotable <- read.csv("Oncoprint_data_table.tsv", header = T, sep = "\t", na.strings = c("", "NA"))
+total_oncotable <- total_oncotable[!is.na(total_oncotable$genes), ]
+rownames(total_oncotable) <- total_oncotable$genes
+
+complete <- total_oncotable[rownames(complete),]
+complete$genes <- NULL
+
+complete_annot <- as.data.frame(colnames(complete))
+complete_annot <- data.frame(do.call('rbind', strsplit(as.character(complete_annot$`colnames(complete)`),'_',fixed=TRUE)))
+colnames(complete_annot) <- c("patient", "time")
+
+
+alter_fun = list(
+		background = function(x, y, w, h) grid.rect(x, y, w, h, 
+			gp = gpar(fill = "#f0f0f0", col = NA)),
+		amp = function(x, y, w, h) grid.rect(x, y, w*0.8, h-unit(2, "pt"), 
+			gp = gpar(fill = "red", col = NA)),
+	  del = function(x, y, w, h) grid.rect(x, y, w*0.8, h-unit(2, "pt"), 
+			gp = gpar(fill = "blue", col = NA)),
+		fusion = function(x, y, w, h) grid.rect(x, y, w*0.4, h*0.4,
+		  gp = gpar(fill = "black", col = NA)),
+		snv = function(x, y, w, h) grid.rect(x, y, w-unit(2, "pt"), h*0.33, 
+			gp = gpar(fill = "#008000", col = NA))
+	)
+cairo_pdf("../oncoprint_total.pdf", height = 50, width = 10)
+col = c(snv = "#008000", amp = "red", del = "blue", fusion = "black")
+column_title = "OncoPrint for PDX osteosarcoma models"
+heatmap_legend_param = list(title = "Alternations", at = c("snv", "amp", "del", "fusion"), 
+		labels = c("Mutations", "Amplifications", "Deletions", "Fusions"))
+to_print <- oncoPrint(complete,column_order = c("MAP177_Diag", "MAP177_Relapse", "MAP177_Ortho", "MAP177_Sc", "MAP194_Diag", "MAP194_Relapse", "MAP194_Ortho", "MAP194_Sc", "MAP217_Diag", "MAP217_Relapse", "MAP217_Ortho", "MAP217_Sc", "MAP342_Diag", "MAP342_Relapse", "MAP342_Ortho", "MAP342_Ortho.meta", "MAP469_Diag", "MAP469_Relapse", "MAP469_Ortho", "MAP469_Sc", "MAP559_Relapse", "MAP559_Ortho", "MAP559_Sc", "MAP636_Diag", "MAP636_Relapse", "MAP636_Ortho", "MAP636_Sc"),
+	alter_fun = alter_fun,
+	top_annotation = HeatmapAnnotation(df = complete_annot,
+    col = list(patient = c("MAP177" = "#E8552D", "MAP194" = "#2EC021", "MAP217" = "#1F445C", "MAP342" = "#D48B57", "MAP469" = "#824587", "MAP559" = "#ADA49E", "MAP636" = "#4A9AD3"),
+               time = c("Diag" = "black", "Relapse" = "red", "Ortho" = "blue", "Ortho.meta" = "blue", "Sc" = "green"))),
+	column_title = column_title,
+	heatmap_legend_param = heatmap_legend_param,
+	col = col)
+pdf("oncoprint_all_data.pdf", height = 32, width = 10)
+print(to_print)
+dev.off()
+
+###list_genes_circos
+rownames(CGC_list) <- CGC_list$Gene.Symbol
+to_write <- CGC_list[rownames(complete),]
+to_write <- to_write[,c(1,4)]
+chr <- data.frame(do.call('rbind', strsplit(as.character(to_write$Genome.Location), split = ":", fixed = TRUE)))
+to_write$chr <- paste("chr",chr$X1, sep = "")
+positions <- data.frame(do.call('rbind', strsplit(as.character(chr$X2), split = "-", fixed = TRUE)))
+to_write$start <- positions$X1
+to_write$stop <- positions$X1
+
+final_genes <- to_write[, c("chr", "start", "stop","Gene.Symbol")]
+colnames(final_genes) <- NULL
+write.csv(final_genes, file = "all_genes_circos.tsv", quote = FALSE, row.names = FALSE, col.names = FALSE)
+```

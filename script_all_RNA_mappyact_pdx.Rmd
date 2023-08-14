@@ -1,0 +1,376 @@
+---
+title: "script_all_mappyact_PDX"
+author: "Robin Droit"
+date: "12/10/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## preparing the data for rna seq analysis
+combining the tables from the osteosarcoma analysis and the table from the mappyacts supplementary PDX and patient samples
+
+```{r data loading}
+# table PDX MAPPYACT
+table_expression_PDX <- read.table(file = "../data/PDX_expression_matrix/MAPPYACTS_PDX_human_Salmon_matrix_20211008.csv", header = T, sep = ";")
+samples_PDX <- colnames(table_expression_PDX)[-1]
+samples_PDX_mem <- samples_PDX
+samples_PDX <- paste(samples_PDX_mem, "_PDX", sep="")
+
+# table expression osteo PDX
+table_expression_osteo_PDX <- read.table(file = "../data/Salmon_missing_files/file_salmon_tpm_pdx_osteo.csv", header = TRUE)
+
+# table expression human MAPPYACT
+load( "../data/Human_expression_matrix/SalmonGENEXP_MAPPYACTS_MOSCATO_Patients_RINok_20210623.RData")
+table_expression_human <- as.data.frame(SalmonGENEXP$abundance)
+table_expression_human <- table_expression_human[, order(colnames(table_expression_human))]
+names(table_expression_human)[names(table_expression_human) == "MAP094_MAP094-T3-ARN"] <- "MAP094"
+samples_human <- colnames(table_expression_human)
+table_expression_human$Hugo_symbol <- rownames(table_expression_human)
+
+meta_data_human <- data.frame(samples_human)
+meta_data_human$sample <- meta_data_human$samples_human
+meta_data_human$species <- "Human"
+colnames(meta_data_human) <- c("Sample", "Patient", "Species")
+meta_data_human$study <- "Human_MAPPYACT"
+meta_data_cbio <- read.table(file = "../data/clinical_data.csv", header = T, sep = ",", fill = T)
+rownames(meta_data_cbio) <- meta_data_cbio$PATIENT_ID
+```
+
+```{r creating final table}
+meta_data <- data.frame(samples_PDX)
+meta_data$sample <- samples_PDX_mem
+meta_data$species <- "Mouse"
+colnames(meta_data) <- c("Sample", "Patient", "Species")
+meta_data$study <- "PDX_MAPPYACT"
+
+# keeping common genes
+table_expression_human <- table_expression_human[match(table_expression_osteo_PDX$Hugo_symbol, table_expression_human$Hugo_symbol),]
+table_expression_human <- table_expression_human[complete.cases(table_expression_human),]
+table_expression_human$Hugo_symbol <- NULL
+
+table_expression_PDX <- table_expression_PDX[match(table_expression_osteo_PDX$Hugo_symbol, table_expression_PDX$Hugo_symbol),]
+table_expression_PDX <- table_expression_PDX[complete.cases(table_expression_PDX),]
+rownames(table_expression_PDX) <- table_expression_PDX$Hugo_symbol
+table_expression_PDX$Hugo_symbol <- NULL
+colnames(table_expression_PDX) <- samples_PDX
+
+table_expression_osteo_PDX <- table_expression_osteo_PDX[match(table_expression_osteo_PDX$Hugo_symbol, rownames(table_expression_PDX)),]
+table_expression_osteo_PDX <- table_expression_osteo_PDX[complete.cases(table_expression_osteo_PDX),]
+rownames(table_expression_osteo_PDX) <- table_expression_osteo_PDX$Hugo_symbol
+table_expression_osteo_PDX <- table_expression_osteo_PDX[,c("MAP177.Relapse", "MAP177.Sc", "MAP469.Sc", "MAP559.Sc")]
+colnames(table_expression_osteo_PDX) <- c("MAP177", "MAP177_PDX", "MAP469_PDX", "MAP559_PDX")
+patients_pdx_osteo <- c("MAP177", "MAP177", "MAP469", "MAP559")
+meta_data_osteo <- data.frame(colnames(table_expression_osteo_PDX))
+meta_data_osteo$Patient <- patients_pdx_osteo
+meta_data_osteo$Species <- c("Human", "Mouse", "Mouse", "Mouse")
+colnames(meta_data_osteo) <- c("Sample", "Patient", "Species")
+meta_data_osteo$study <- "PDX_osteo"
+
+table_tmp <- merge(table_expression_human, table_expression_PDX, by = 0)
+rownames(table_tmp) <- table_tmp$Row.names
+table_tmp$Row.names <- NULL
+table_all_samples <- merge(table_tmp, table_expression_osteo_PDX, by = 0)
+
+table_all_samples <- table_all_samples[,order(colnames(table_all_samples))]
+rownames(table_all_samples) <- table_all_samples$Row.names
+write.table(table_all_samples, file = "table_all_samples_MAPPYACT_PDX_protein_symbol.csv", sep = "\t", quote = F, col.names = T, row.names = F)
+table_all_samples$Row.names <- NULL
+```
+
+## table ready (the one in the data tables)
+starting the analysis 
+
+```{r analysing rna seq}
+library(dplyr)
+library(tidyverse)
+library(factoextra)
+# creating meta data table
+meta_data_all_samples <- rbind(meta_data, meta_data_human)
+meta_data_all_samples <- rbind(meta_data_all_samples, meta_data_osteo)
+rownames(meta_data_all_samples) <- meta_data_all_samples$Sample
+meta_data_all_samples <- meta_data_all_samples[order(rownames(meta_data_all_samples)),]
+meta_data_all_samples$CancerType <- meta_data_cbio[meta_data_all_samples$Patient, "TUMOR_TYPE"]
+meta_data_all_samples$DiseaseGroup <- meta_data_cbio[meta_data_all_samples$Patient, "DISEASE_GROUP"]
+meta_data_all_samples$AnalyseSite <- meta_data_cbio[meta_data_all_samples$Patient, "ANALYSE_SITE"]
+meta_data_all_samples$OriginSite <- meta_data_cbio[meta_data_all_samples$Patient, "ORIGIN_SITE"]
+meta_data_all_samples$Gender <- meta_data_cbio[meta_data_all_samples$Patient, "GENDER"]
+write.table(meta_data_all_samples, file = "meta_data_all_samples_MAPPYACT_PDX.csv", sep = "\t", quote = F, col.names = T, row.names = F)
+meta_data_all_samples <- meta_data_all_samples[complete.cases(meta_data_all_samples),]
+
+
+# naiv ACP
+table_all_samples <- table_all_samples[complete.cases(table_all_samples),rownames(meta_data_all_samples)]
+table_all_samples <- table_all_samples %>% mutate_if(is.factor, as.numeric)
+table_all_samples <- table_all_samples %>% mutate_if(is.character, as.numeric)
+table_all_samples <- table_all_samples[complete.cases(table_all_samples),]
+table_all_samples_log <- log10(table_all_samples + 1)
+acp_all <- prcomp(t(table_all_samples_log))
+
+pdf(file = "explained_variance.pdf")
+fviz_eig(acp_all)
+dev.off()
+
+
+
+library(umap)
+umap_naiv <- umap(acp_all$x)
+
+umap_plot_df <- data.frame(umap_naiv$layout) %>%
+  # Turn sample IDs stored as row names into a column
+  tibble::rownames_to_column("Sample") %>%
+  # Add the metadata into this data frame; match by sample IDs
+  dplyr::inner_join(meta_data_all_samples, by = "Sample")
+
+library(ggforce)
+cairo_pdf(file = "umap_all_genes.pdf")
+ggplot(
+  umap_plot_df,
+  aes(
+    x = X1,
+    y = X2,
+    color = Species,# label points with different colors for each `subgroup`
+    shape = Species,
+    size = 3
+  )
+) +
+  geom_point() +
+  geom_mark_ellipse(aes(x=X1, y=X2,color=CancerType, group=CancerType, size = 0.2), linetype = 2)
+dev.off()
+
+# correlation 
+cor_acp_mat <- cor(t(acp_all$x[,c(1,2,3)]))
+
+pheatmap::pheatmap(cor_acp_mat, clustering_method = "ward.D", filename = "heatmap_ACP_correlation.pdf", cellheight = 8, clustering_distance_rows = amap::Dist(cor_acp_mat, method="euclidean"), clustering_distance_cols = amap::Dist(t(cor_acp_mat), method = "kendall"))
+
+cor_count_matrix <- cor(table_all_samples_log)
+pheatmap::pheatmap(cor_count_matrix, clustering_method = "ward.D", filename = "heatmap_expression_correlation.pdf", cellheight = 8, cluster_rows = F, cluster_cols = F)
+
+pheatmap::pheatmap(cor_count_matrix, clustering_method = "ward.D", filename = "heatmap_expression_correlation_clustered.pdf", cellheight = 8, clustering_distance_rows = amap::Dist(cor_acp_mat, method="euclidean"), clustering_distance_cols = amap::Dist(t(cor_acp_mat), method = "kendall"))
+
+```
+
+## Functions to produce the gene enrichments for each component of the PCA (using enrichR)
+
+```{r function pca enrichment}
+PCA_enrichment <- function(prcomp_object, dbs, components, name_file){
+  
+  pdf(file = name_file, width = 12, height = 12)
+  for(database in dbs){
+    first <- T
+    for(component in components){
+      if(first == T){
+        first <- F
+        table_enrich_PCA <- names(head(sort(abs(as.table(prcomp_object$rotation)[,component]), decreasing = T),100))
+        enrichr_PCA <- enrichr(table_enrich_PCA, database)
+        table_enrich_PCA <- enrichr_PCA[1]
+        table_enrich_PCA$PCA <- str_c("PC", as.character(component))
+      }
+      else{
+        table_component_sup <- names(head(sort(abs(as.table(prcomp_object$rotation)[,component]), decreasing = T),100))
+        enrichr_comp <- enrichr(table_component_sup, database)
+        table_component_sup <- enrichr_comp[1]
+        table_component_sup$PCA <- str_c("PC", as.character(component))
+        table_enrich_PCA <- bind_rows(table_enrich_PCA, table_component_sup)
+      }
+      
+    }
+    # print(table_enrich_PCA)
+    table_enrich_PCA <- as.data.frame(table_enrich_PCA)
+    table_temp <- table_enrich_PCA[,database]
+    table_temp$PCA <- table_enrich_PCA[,"PCA"]
+    table_enrich_PCA <- table_temp
+    #print(table_enrich_PCA[,database])
+    print(colnames(table_enrich_PCA))
+    #print(str_c(database, '.', 'Adjusted.P.value'))
+    table_enrich_PCA <- table_enrich_PCA[which(table_enrich_PCA[,'Adjusted.P.value'] <= 0.05),]
+    # print(table_enrich_PCA)
+    if(nrow(table_enrich_PCA) > 0){
+      table_enrich_PCA <- separate(table_enrich_PCA, col = "Overlap", sep = "/", into = c("nb_genes", "nb_genes_class"), remove = F)
+      # print(table_enrich_PCA)
+      table_enrich_PCA$nb_genes <- as.numeric(table_enrich_PCA$nb_genes)
+      plot_enrich_pca <- ggplot(table_enrich_PCA, aes(x = PCA, y = Term)) + geom_point(aes(colour=Adjusted.P.value, size=nb_genes)) + labs(title = database, x = "Component", y = "Term") + scale_color_gradient(high = "blue", low = "red")
+      plot(ggplotGrob(plot_enrich_pca))
+    }
+    
+  }
+  dev.off()
+}
+```
+
+```{r function enrichr plot}
+plot_enrichr <- function(enrichr_object, dbs, file_name){
+  pdf(file = file_name)
+for (i in 1:length(dbs)){
+  print(i)
+  table_to_plot <- enrichr_object[[i]]
+  table_to_plot <- table_to_plot[which(table_to_plot$Adjusted.P.value <= 0.05),]
+  if (nrow(table_to_plot) >= 1) {
+    unique_plot <- plotEnrich(table_to_plot, showTerms = 20, numChar = 50, y = "Count", orderBy = "Adjusted.P.value", title = dbs[i])
+    unique_plot + theme(axis.text=element_text(size=12), axis.title=element_text(size=14,face="bold"))
+    print(unique_plot)
+  }
+}
+dev.off()
+}
+```
+
+```{r PCA enrichment}
+library(enrichR)
+dbs_all <- listEnrichrDbs()
+dbs_all <- as.vector(dbs_all$libraryName)
+
+PCA_enrichment(acp_all, dbs_all, c(1,2,3,4), "ACP_enrichment_component.pdf")
+dev.off()
+
+table <- acp_all$x
+```
+
+## differential analysis between patient and PDX samples
+
+```{r differential analysis}
+library(DESeq2)
+library(factoextra)
+library(plyr)
+library(tidyr)
+library(enrichR)
+
+ddsMat <- DESeqDataSetFromMatrix(countData = round(table_all_samples),
+                                 colData = meta_data_all_samples,
+                                 design = ~ Species)
+
+keep <- rowSums(counts(ddsMat)) > 1
+dds <- ddsMat[keep,]
+vsd <- vst(dds, blind = FALSE)
+matrix_vsd <- assay(vsd)
+
+sampleDists <- dist(t(assay(vsd)))
+
+sampleDistMatrix <- as.matrix( sampleDists )
+pheatmap::pheatmap(sampleDistMatrix,
+         clustering_distance_rows = sampleDists,
+         clustering_distance_cols = sampleDists,
+         filename = "sample_distance_matrix.pdf")
+
+pcaData <- plotPCA(vsd, intgroup = c("Species"), returnData = TRUE)
+percentVar <- round(100 * attr(pcaData, "percentVar"))
+
+dds <- DESeq(dds)
+res <- results(dds, contrast = c("Species", "Human", "Mouse"))
+
+
+####volcano
+alpha <- 0.05 # Threshold on the adjusted p-value
+cols <- densCols(res$log2FoldChange, -log10(res$pvalue))
+
+png("volcano_plot_human_mou.png")
+plot(res$log2FoldChange, -log10(res$padj), col=cols, panel.first=grid(),
+     main="Volcano plot", xlab="Effect size: log2(fold-change)", ylab="-log10(adjusted p-value)",
+     pch=20, cex=0.6)
+abline(v=0)
+abline(v=c(-1.5,1.5), col="brown")
+abline(h=-log10(alpha), col="brown")
+
+dev.off()
+
+
+res_select <- res[-which(abs(res$log2FoldChange) > 1.5 & res$padj < alpha),]
+res_removed <- res[which(abs(res$log2FoldChange) > 1.5 & res$padj < alpha),]
+res_removed_data <- as.data.frame(res_removed[,c("log2FoldChange", "padj", "baseMean")])
+res_removed_data <- res_removed_data[order(abs(res_removed_data$log2FoldChange), decreasing = T),]
+write.table(res_removed_data, file = "table_foldChange_removed_genes_expression.csv", sep = "\t", quote = F)
+
+png("volcano_plot_human_mou_after_selection.png")
+plot(res_select$log2FoldChange, -log10(res_select$padj), col=cols, panel.first=grid(),
+     main="Volcano plot", xlab="Effect size: log2(fold-change)", ylab="-log10(adjusted p-value)",
+     pch=20, cex=0.6)
+abline(v=0)
+abline(v=c(-1.5,1.5), col="brown")
+abline(h=-log10(alpha), col="brown")
+dev.off()
+
+list_genes_keep <- rownames(res_select)
+
+table_counts_removed <- matrix_vsd[which(!rownames(res) %in% list_genes_keep),]
+table_counts_after_diff <- matrix_vsd[list_genes_keep,]
+```
+
+```{r analysing differential analysis}
+genes_removed <- rownames(table_counts_removed)
+
+enrichment_removed <- enrichr(genes_removed, dbs_all)
+plot_enrichr(enrichment_removed, dbs_all, "plot_enrichment_removed_genes_expression.pdf")
+
+project_removed.pca <- prcomp(t(table_counts_removed))
+project_after_diff.pca <- prcomp(t(table_counts_after_diff))
+
+table_explained_variance_after_diff <- summary(project_after_diff.pca)
+table_explained_variance_after_diff <- table_explained_variance_after_diff$importance
+write.table(table_explained_variance_after_diff, file = "table_explained_variance_after_diff.csv", sep = "\t", quote = F, row.names = T)
+
+table_explained_variance_removed <- summary(project_removed.pca)
+table_explained_variance_removed <- table_explained_variance_removed$importance
+write.table(table_explained_variance_removed, file = "table_explained_variance_removed.csv", sep = "\t", quote = F, row.names = T)
+
+
+pdf(file = "explained_variance_after_diff_exp.pdf")
+fviz_eig(project_after_diff.pca)
+dev.off()
+
+pdf(file = "explained_variance_removed_exp.pdf")
+fviz_eig(project_removed.pca)
+dev.off()
+
+
+library(umap)
+umap_after_diff <- umap(project_after_diff.pca$x)
+
+umap_plot_df <- data.frame(umap_after_diff$layout) %>%
+  # Turn sample IDs stored as row names into a column
+  tibble::rownames_to_column("Sample") %>%
+  # Add the metadata into this data frame; match by sample IDs
+  dplyr::inner_join(meta_data_all_samples, by = "Sample")
+
+library(ggforce)
+cairo_pdf(file = "umap_all_genes_after_diff_exp.pdf")
+ggplot(
+  umap_plot_df,
+  aes(
+    x = X1,
+    y = X2,
+    color = CancerType,# label points with different colors for each `subgroup`
+    shape = Species,
+    size = 3
+  )
+) +
+  geom_point() +
+  geom_mark_ellipse(aes(x=X1, y=X2,color=CancerType, group=CancerType, size = 0.2), linetype = 2)
+dev.off()
+
+umap_removed <- umap(project_removed.pca$x)
+
+umap_removed_plot_df <- data.frame(umap_removed$layout) %>%
+  # Turn sample IDs stored as row names into a column
+  tibble::rownames_to_column("Sample") %>%
+  # Add the metadata into this data frame; match by sample IDs
+  dplyr::inner_join(meta_data_all_samples, by = "Sample")
+
+cairo_pdf(file = "umap_removed_after_diff_exp.pdf")
+ggplot(
+  umap_removed_plot_df,
+  aes(
+    x = X1,
+    y = X2,
+    color = CancerType,# label points with different colors for each `subgroup`
+    shape = Species,
+    size = 3
+  )
+) +
+  geom_point() +
+  geom_mark_ellipse(aes(x=X1, y=X2, group=Species, size = 0.2), linetype = 2)
+  #stat_ellipse(aes(x=X1, y=X2,color=Patient, group=Patient),type = "euclid")
+dev.off()
+
+```
