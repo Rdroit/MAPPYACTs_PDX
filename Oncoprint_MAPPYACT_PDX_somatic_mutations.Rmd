@@ -63,7 +63,8 @@ rownames(newdata) <- newdata$names
 
 complete <- complete[,newdata$names]
 
-order <- c("MAP177_Relapse","MAP177_PDX","MAP194_Relapse",	"MAP194_PDX",	"MAP204_Relapse",	"MAP204_PDX",	"MAP217_Relapse",	"MAP217_PDX",	"MAP469_Relapse",	"MAP469_PDX",	"MAP559_Relapse",	"MAP559_PDX",	"MAP636_Relapse",	"MAP636_PDX",	"MAP215_Relapse",	"MAP215_PDX",	"MAP266_Relapse",	"MAP266_PDX",	"MAP020_Relapse",	"MAP020_PDX",	"MAP086_Relapse",	"MAP086_PDX",	"MAP182_Relapse",	"MAP182_PDX",	"MAP066_Relapse",	"MAP066_PDX",	"MAP108_Relapse",	"MAP108_PDX",	"MAP238_Relapse",	"MAP238_PDX",	"MAP301_Relapse",	"MAP301_PDX",	"MAP303_Relapse",	"MAP303_PDX",	"MAP094_Relapse",	"MAP094_PDX",	"MAP099_Relapse",	"MAP099_PDX",	"MAP125_Relapse",	"MAP125_PDX",	"MAP199_Relapse",	"MAP199_PDX",	"MAP042_Relapse",	"MAP042_PDX",	"MAP097_Relapse",	"MAP097_PDX",	"MAP123_Relapse",	"MAP123_PDX",	"MAP448_Relapse",	"MAP448_PDX",	"MAP539_Relapse",	"MAP539_PDX",	"MAP316_Relapse",	"MAP316_PDX",		"MAP113_Relapse",	"MAP113_PDX",	"MAP119_Relapse",	"MAP119_PDX",	"MAP167_Relapse",	"MAP167_PDX",	"MAP179_Relapse",	"MAP179_PDX",	"MAP006_Relapse",	"MAP006_PDX",	"MAP295_Relapse",	"MAP295_PDX",	"MAP114_Relapse",	"MAP114_PDX",	"MAP196_Relapse",	"MAP196_PDX",	"MAP046_Relapse",	"MAP046_PDX",	"MAP141_Relapse",	"MAP141_PDX",	"MAP170_Relapse",	"MAP170_PDX",	"MAP276_Relapse",	"MAP276_PDX" )
+order <- c("GR-OS-9_Relapse", "GR-OS-9_PDX", "GR-OS-10_Relapse", "GR-OS-10_PDX","GR-OS-11_Relapse","GR-OS-11_PDX","GR-OS-12_Relapse","GR-OS-12_PDX", "GR-OS-17_Relapse","GR-OS-17_PDX","GR-OS-18_Relapse","GR-OS-18_PDX","GR-OS-20_Relapse","GR-OS-20_PDX","GR-EW-3_Relapse","GR-EW-3_PDX","GR-EW-5_Relapse","GR-EW-5_PDX", "GR-RMS-1_Relapse", "GR-RMS-1_PDX","GR-RMS-3_Relapse","GR-RMS-3_PDX","GR-RMS-6_Relapse","GR-RMS-6_PDX","GR-RMS-2_Relapse","GR-RMS-2_PDX","GR-RMS-4_Relapse","GR-RMS-4_PDX","GR-RMS-8_Relapse","GR-RMS-8_PDX","GR-RMS-10_Relapse","GR-RMS-10_PDX","GR-RMS-11_Relapse","GR-RMS-11_PDX",	"GR-US-2_Relapse","GR-US-2_PDX","GR-NB-4_Relapse","GR-NB-4_PDX","GR-NB-5_Relapse","GR-NB-5_PDX","GR-NB-7_Relapse","GR-NB-7_PDX","GR-NPB-1_Relapse","GR-NPB-1_PDX","GR-NPB-2_Relapse","GR-NPB-2_PDX","GR-NPB-3_Relapse","GR-NPB-3_PDX","GR-NPB-7_Relapse","GR-NPB-7_PDX","GR-NPB-8_Relapse","GR-NPB-8_PDX","GR-PPB-1_Relapse","GR-PPB-1_PDX","GR-HGG-4_Relapse","GR-HGG-4_PDX","GR-HGG-5_Relapse","GR-HGG-5_PDX","GR-HGG-8_Relapse","GR-HGG-8_PDX","GR-HGG-9_Relapse","GR-HGG-9_PDX","GR-ALCL-1_Relapse","GR-ALCL-1_PDX","GR-BL-1_Relapse","GR-BL-1_PDX","GR-BALL-1_Relapse","GR-BALL-1_PDX","GR-BALL-3_Relapse","GR-BALL-3_PDX","CEA-TALL-1_Relapse","CEA-TALL-1_PDX","CEA-TALL-2_Relapse","CEA-TALL-2_PDX","CEA-TALL-3_Relapse","CEA-TALL-3_PDX","CEA-TALL-5_Relapse","CEA-TALL-5_PDX")
+
 complete <- complete[,order]
 
 final_table = read.csv("matrix_source_oncoprint_final_figure_fix.tsv", header = T, sep = "\t")
@@ -77,7 +78,6 @@ annot_table <- newdata[,c("patient", "type", "TUMOR_TYPE")]
 colnames(annot_table) <- c("patient", "sample_type", "tumor_type")
 annot_table[,"sample_type"] <- as.character(annot_table[,"sample_type"])
 annot_table[,"patient"] <- as.character(annot_table[,"patient"])
-annot_table[which(annot_table[,"patient"] == "MAP213"),] = NULL
 annot_table[which(annot_table[,"sample_type"] == "Relapse"), "sample_type"] = "Primary relapsed tumor"
 annot_table[,"sample_type"] <- as.factor(annot_table[,"sample_type"])
 
@@ -211,10 +211,10 @@ col = c(snv = "#008000", amp = "red", del = "blue", fusion = "black")
 column_title = "OncoPrint for PDX osteosarcoma models"
 heatmap_legend_param = list(title = "Alternations", at = c("snv", "amp", "del", "fusion"), 
 		labels = c("Mutations", "Amplifications", "Deletions", "Fusions"))
-to_print <- oncoPrint(complete,column_order = c("MAP177_Diag", "MAP177_Relapse", "MAP177_Ortho", "MAP177_Sc", "MAP194_Diag", "MAP194_Relapse", "MAP194_Ortho", "MAP194_Sc", "MAP217_Diag", "MAP217_Relapse", "MAP217_Ortho", "MAP217_Sc", "MAP342_Diag", "MAP342_Relapse", "MAP342_Ortho", "MAP342_Ortho.meta", "MAP469_Diag", "MAP469_Relapse", "MAP469_Ortho", "MAP469_Sc", "MAP559_Relapse", "MAP559_Ortho", "MAP559_Sc", "MAP636_Diag", "MAP636_Relapse", "MAP636_Ortho", "MAP636_Sc"),
+to_print <- oncoPrint(complete,column_order = c("GR-OS-9_Relapse", "GR-OS-9_PDX", "GR-OS-10_Relapse", "GR-OS-10_PDX","GR-OS-11_Relapse","GR-OS-11_PDX","GR-OS-12_Relapse","GR-OS-12_PDX", "GR-OS-17_Relapse","GR-OS-17_PDX","GR-OS-18_Relapse","GR-OS-18_PDX","GR-OS-20_Relapse","GR-OS-20_PDX"),
 	alter_fun = alter_fun,
 	top_annotation = HeatmapAnnotation(df = complete_annot,
-    col = list(patient = c("MAP177" = "#E8552D", "MAP194" = "#2EC021", "MAP217" = "#1F445C", "MAP342" = "#D48B57", "MAP469" = "#824587", "MAP559" = "#ADA49E", "MAP636" = "#4A9AD3"),
+    col = list(patient = c("GR-OS-9" = "#E8552D", "GR-OS-10" = "#2EC021", "GR-OS-11" = "#1F445C", "GR-OS-12" = "#D48B57", "GR-OS-17" = "#824587", "GR-OS-18" = "#ADA49E", "GR-OS-20" = "#4A9AD3"),
                time = c("Diag" = "black", "Relapse" = "red", "Ortho" = "blue", "Ortho.meta" = "blue", "Sc" = "green"))),
 	column_title = column_title,
 	heatmap_legend_param = heatmap_legend_param,
