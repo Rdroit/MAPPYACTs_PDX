@@ -26,7 +26,6 @@ table_expression_osteo_PDX <- read.table(file = "../data/Salmon_missing_files/fi
 load( "../data/Human_expression_matrix/SalmonGENEXP_MAPPYACTS_MOSCATO_Patients_RINok_20210623.RData")
 table_expression_human <- as.data.frame(SalmonGENEXP$abundance)
 table_expression_human <- table_expression_human[, order(colnames(table_expression_human))]
-names(table_expression_human)[names(table_expression_human) == "MAP094_MAP094-T3-ARN"] <- "MAP094"
 samples_human <- colnames(table_expression_human)
 table_expression_human$Hugo_symbol <- rownames(table_expression_human)
 
@@ -60,9 +59,9 @@ colnames(table_expression_PDX) <- samples_PDX
 table_expression_osteo_PDX <- table_expression_osteo_PDX[match(table_expression_osteo_PDX$Hugo_symbol, rownames(table_expression_PDX)),]
 table_expression_osteo_PDX <- table_expression_osteo_PDX[complete.cases(table_expression_osteo_PDX),]
 rownames(table_expression_osteo_PDX) <- table_expression_osteo_PDX$Hugo_symbol
-table_expression_osteo_PDX <- table_expression_osteo_PDX[,c("MAP177.Relapse", "MAP177.Sc", "MAP469.Sc", "MAP559.Sc")]
-colnames(table_expression_osteo_PDX) <- c("MAP177", "MAP177_PDX", "MAP469_PDX", "MAP559_PDX")
-patients_pdx_osteo <- c("MAP177", "MAP177", "MAP469", "MAP559")
+table_expression_osteo_PDX <- table_expression_osteo_PDX[,c("GR-OS-9.Relapse", "GR-OS-9.Sc", "GR-OS-17.Sc", "GR-OS-18.Sc")]
+colnames(table_expression_osteo_PDX) <- c("GR-OS-9", "GR-OS-9_PDX", "GR-OS-17_PDX", "GR-OS-18_PDX")
+patients_pdx_osteo <- c("GR-OS-9", "GR-OS-9", "GR-OS-17", "GR-OS-18")
 meta_data_osteo <- data.frame(colnames(table_expression_osteo_PDX))
 meta_data_osteo$Patient <- patients_pdx_osteo
 meta_data_osteo$Species <- c("Human", "Mouse", "Mouse", "Mouse")
